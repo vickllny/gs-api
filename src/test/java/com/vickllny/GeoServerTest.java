@@ -5,14 +5,22 @@ import it.geosolutions.geoserver.rest.GeoServerRESTPublisher;
 import it.geosolutions.geoserver.rest.GeoServerRESTReader;
 import it.geosolutions.geoserver.rest.decoder.RESTDataStore;
 import it.geosolutions.geoserver.rest.encoder.coverage.GSCoverageEncoder;
+import org.geotools.ows.ServiceException;
+import org.geotools.ows.wms.StyleImpl;
+import org.geotools.ows.wmts.WebMapTileServer;
+import org.geotools.ows.wmts.model.WMTSCapabilities;
+import org.geotools.ows.wmts.model.WMTSLayer;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.xml.sax.SAXException;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.List;
 
 public class GeoServerTest {
 
@@ -94,15 +102,30 @@ public class GeoServerTest {
 
         WebMapTileServer wmts = null;
         try {
+            assert url != null;
             wmts = new WebMapTileServer(url);
+
+            final WMTSCapabilities capabilities = wmts.getCapabilities();
+            final List<WMTSLayer> layerList = capabilities.getLayerList();
+
+            for (final WMTSLayer layer : layerList) {
+                LOGGER.debug("Layer: " + layer.getName());
+                LOGGER.debug("       " + layer.getTitle());
+
+                for (StyleImpl style : layer.getStyles()) {
+                    // Print style info
+                    LOGGER.debug("Style:");
+                    LOGGER.debug("  Name:  " + style.getName());
+                    LOGGER.debug("  Title: " + style.getTitle());
+                }
+            }
+
         } catch (IOException e) {
             // There was an error communicating with the server
             // For example, the server is down
         } catch (ServiceException e) {
             // The server returned a ServiceException (unusual in this case)
-        } catch (SAXException e) {
-            // Unable to parse the response from the server
-            // For example, the capabilities it returned was not valid
         }
+
     }
 }
