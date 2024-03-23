@@ -3,7 +3,9 @@ package com.vickllny;
 import it.geosolutions.geoserver.rest.GeoServerRESTManager;
 import it.geosolutions.geoserver.rest.GeoServerRESTPublisher;
 import it.geosolutions.geoserver.rest.GeoServerRESTReader;
+import it.geosolutions.geoserver.rest.HTTPUtils;
 import it.geosolutions.geoserver.rest.decoder.RESTDataStore;
+import it.geosolutions.geoserver.rest.decoder.RESTLayer;
 import it.geosolutions.geoserver.rest.encoder.coverage.GSCoverageEncoder;
 import org.geotools.ows.ServiceException;
 import org.geotools.ows.wms.StyleImpl;
@@ -88,6 +90,25 @@ public class GeoServerTest {
         boolean dsRemoved = manager.getPublisher().removeDatastore(WS_NAME, storeName, true);
         LOGGER.debug("ftRemoved: {}", ftRemoved);
         LOGGER.debug("dsRemoved: {}", dsRemoved);
+    }
+
+    @Test
+    public void cql(){
+        String layerName = "CHN_roads";
+        final GeoServerRESTReader reader = manager.getReader();
+        //获取要更新的图层信息
+        RESTLayer layer = reader.getLayer(WS_NAME, layerName);
+
+        LOGGER.debug("123");
+        // 构造更新请求的 XML
+//        String xml = "<layer><resource><id>" + layer.getResource().getId() + "</id><name>" + layer.getResource().getName()
+//                + "</name><href>" + layer.getResource().getHref() + "</href><title>" + layer.getResource().getTitle()
+//                + "</title></resource><enabled>true</enabled><name>" + layer.getName() + "</name><queryable>true</queryable>"
+//                + "<cql_filter>age < 32</cql_filter></layer>";
+
+        // 发送更新请求
+
+//        String response = HTTPUtils.postXml("/rest/layers/" + layer.getName() + ".xml", xml, USERNAME, PASSWORD);
     }
 
     @Test
