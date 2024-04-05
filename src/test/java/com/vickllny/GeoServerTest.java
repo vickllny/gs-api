@@ -1,27 +1,39 @@
 package com.vickllny;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import it.geosolutions.geoserver.rest.GeoServerRESTManager;
 import it.geosolutions.geoserver.rest.GeoServerRESTPublisher;
 import it.geosolutions.geoserver.rest.GeoServerRESTReader;
 import it.geosolutions.geoserver.rest.HTTPUtils;
-import it.geosolutions.geoserver.rest.decoder.RESTDataStore;
 import it.geosolutions.geoserver.rest.decoder.RESTLayer;
-import it.geosolutions.geoserver.rest.encoder.coverage.GSCoverageEncoder;
+import it.geosolutions.geoserver.rest.encoder.datastore.GSPostGISDatastoreEncoder;
+import org.geotools.data.shapefile.ShapefileDataStore;
+import org.geotools.data.simple.SimpleFeatureCollection;
+import org.geotools.data.simple.SimpleFeatureIterator;
+import org.geotools.feature.simple.SimpleFeatureImpl;
 import org.geotools.ows.ServiceException;
 import org.geotools.ows.wms.StyleImpl;
 import org.geotools.ows.wmts.WebMapTileServer;
 import org.geotools.ows.wmts.model.WMTSCapabilities;
 import org.geotools.ows.wmts.model.WMTSLayer;
 import org.junit.Test;
+import org.opengis.feature.simple.SimpleFeature;
+import org.opengis.feature.simple.SimpleFeatureType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.xml.sax.SAXException;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.Charset;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 
 public class GeoServerTest {
@@ -147,6 +159,92 @@ public class GeoServerTest {
         } catch (ServiceException e) {
             // The server returned a ServiceException (unusual in this case)
         }
+    }
 
+    static final String host = "127.0.0.1";
+    static final int port = 5433;
+    static final String username = "postgres";
+    static final String password = "postgres";
+    static final String database = "gs";
+
+    @Test
+    public void readShp2db() throws IOException {
+        final String shp = "/Users/vickllny/gis/CHN_rds/CHN_roads.shp";
+        // 打开Shapefile文件
+        final File file = new File(shp);
+        final URL url = file.toURI().toURL();
+        final ShapefileDataStore dataStore = new ShapefileDataStore(url);
+        dataStore.setCharset(Charset.forName("GBK"));
+
+        // 读取feature类型
+        SimpleFeatureType featureType = dataStore.getSchema();
+        System.out.println("Feature Type: " + featureType.getTypeName());
+
+        // 读取feature数据
+        SimpleFeatureCollection collection = dataStore.getFeatureSource().getFeatures();
+        final List<List<String>> values = new ArrayList<>(collection.size());
+        SimpleFeatureIterator iterator = collection.features();
+        while (iterator.hasNext()) {
+            SimpleFeatureImpl feature = (SimpleFeatureImpl)iterator.next();
+            // 获取属性名称和值
+            final List<String> tempList = new ArrayList<>(7);
+            values.add(tempList);
+            final String id = feature.getID();
+            tempList.add(id);
+            for (int i = 0; i < featureType.getAttributeCount(); i++) {
+                String attributeName = featureType.getDescriptor(i).getName().toString();
+                tempList.add(String.valueOf(feature.getAttribute(attributeName)));
+            }
+        }
+        iterator.close();
+        dataStore.dispose();
+
+
+        final String jdbcUrl = "jdbc:postgresql://" + host + ":" + port + "/gs?ssl=false";
+        final HikariConfig config = new HikariConfig();
+        config.setUsername(username);
+        config.setPassword(password);
+        config.setJdbcUrl(jdbcUrl);
+        config.setDriverClassName("org.postgresql.Driver");
+
+        try (final HikariDataSource dataSource = new HikariDataSource(config)){
+            final JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+            final String sql = "insert into shp_feature values (?,ST_GeomFromText(?),?,?,?,?,?)";
+            jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+
+                @Override
+                public void setValues(final PreparedStatement ps, final int i) throws SQLException {
+                    ps.setString(1, values.get(i).get(0));
+                    ps.setString(2, values.get(i).get(1));
+                    ps.setString(3, values.get(i).get(2));
+                    ps.setString(4, values.get(i).get(3));
+                    ps.setString(5, values.get(i).get(4));
+                    ps.setString(6, values.get(i).get(5));
+                    ps.setString(7, values.get(i).get(6));
+                }
+
+                @Override
+                public int getBatchSize() {
+                    return values.size();
+                }
+            });
+        }
+    }
+
+    @Test
+    public void createPostGIS(){
+        final GeoServerRESTPublisher publisher = manager.getPublisher();
+        final GSPostGISDatastoreEncoder encoder = new GSPostGISDatastoreEncoder("pg_ds");
+        encoder.setDatabase(database);
+        encoder.setHost(host);
+        encoder.setPort(port);
+        encoder.setUser(username);
+        encoder.setPassword(password);
+        encoder.setSchema("public");
+
+        String sUrl = REST_URL + "/rest/workspaces/" + WS_NAME + "/datastores/";
+        String xml = encoder.toString();
+        String result = HTTPUtils.postXml(sUrl, xml, USERNAME, PASSWORD);
+        LOGGER.debug(result);
     }
 }
