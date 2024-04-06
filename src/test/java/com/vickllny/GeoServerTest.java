@@ -7,7 +7,11 @@ import it.geosolutions.geoserver.rest.GeoServerRESTPublisher;
 import it.geosolutions.geoserver.rest.GeoServerRESTReader;
 import it.geosolutions.geoserver.rest.HTTPUtils;
 import it.geosolutions.geoserver.rest.decoder.RESTLayer;
+import it.geosolutions.geoserver.rest.encoder.GSLayerEncoder;
 import it.geosolutions.geoserver.rest.encoder.datastore.GSPostGISDatastoreEncoder;
+import it.geosolutions.geoserver.rest.encoder.feature.FeatureTypeAttribute;
+import it.geosolutions.geoserver.rest.encoder.feature.GSAttributeEncoder;
+import it.geosolutions.geoserver.rest.encoder.feature.GSFeatureTypeEncoder;
 import org.geotools.data.shapefile.ShapefileDataStore;
 import org.geotools.data.simple.SimpleFeatureCollection;
 import org.geotools.data.simple.SimpleFeatureIterator;
@@ -17,9 +21,14 @@ import org.geotools.ows.wms.StyleImpl;
 import org.geotools.ows.wmts.WebMapTileServer;
 import org.geotools.ows.wmts.model.WMTSCapabilities;
 import org.geotools.ows.wmts.model.WMTSLayer;
+import org.geotools.referencing.CRS;
+import org.jdom.Element;
 import org.junit.Test;
-import org.opengis.feature.simple.SimpleFeature;
+import org.locationtech.jts.geom.Geometry;
 import org.opengis.feature.simple.SimpleFeatureType;
+import org.opengis.geometry.Envelope;
+import org.opengis.referencing.FactoryException;
+import org.opengis.referencing.crs.CoordinateReferenceSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
@@ -56,6 +65,9 @@ public class GeoServerTest {
     }
 
     static final String WS_NAME = "ll";
+    static final String DS_NAME = "pg_ds";
+    static final String DEFAULT_STYLE = "v_boundary_lines";
+
     static String path = "/Users/vickllny/gis/srtm_60_06/srtm_60_06.tif";
 
     @Test
@@ -86,7 +98,7 @@ public class GeoServerTest {
         String storeName = "CHN_rds";
         String layerName = "CHN_roads";
         final File file = new File("/Users/vickllny/gis/CHN_rds.zip");
-        final boolean published = manager.getPublisher().publishShp(WS_NAME, storeName, layerName, file, "EPSG:4326", "v_boundary_lines");
+        final boolean published = manager.getPublisher().publishShp(WS_NAME, storeName, layerName, file, "EPSG:4326", DEFAULT_STYLE);
         if (published) {
             LOGGER.debug("Shp published.");
         } else {
@@ -232,9 +244,8 @@ public class GeoServerTest {
     }
 
     @Test
-    public void createPostGIS(){
-        final GeoServerRESTPublisher publisher = manager.getPublisher();
-        final GSPostGISDatastoreEncoder encoder = new GSPostGISDatastoreEncoder("pg_ds");
+    public void createPostGISDataStores(){
+        final GSPostGISDatastoreEncoder encoder = new GSPostGISDatastoreEncoder(DS_NAME);
         encoder.setDatabase(database);
         encoder.setHost(host);
         encoder.setPort(port);
@@ -247,4 +258,95 @@ public class GeoServerTest {
         String result = HTTPUtils.postXml(sUrl, xml, USERNAME, PASSWORD);
         LOGGER.debug(result);
     }
+
+    @Test
+    public void publishDBLayer() throws FactoryException {
+        final GeoServerRESTPublisher publisher = manager.getPublisher();
+
+        final GSFeatureTypeEncoder1 encoder = new GSFeatureTypeEncoder1();
+        {
+            String name = "shp_feature4";
+            encoder.setNativeName("shp_feature");
+            encoder.setName(name);
+            encoder.setTitle(name);
+            String srsCode = "EPSG:4326";
+            final CoordinateReferenceSystem crs = CRS.decode(srsCode);
+            encoder.setNativeCRS(srsCode);
+            encoder.setSRS(srsCode);
+            final Envelope envelope = CRS.getEnvelope(crs);
+            encoder.setNativeBoundingBox(envelope.getMinimum(1),envelope.getMinimum(0), envelope.getMaximum(1), envelope.getMaximum(0), srsCode);
+            encoder.setLatLonBoundingBox(envelope.getMinimum(1),envelope.getMinimum(0), envelope.getMaximum(1), envelope.getMaximum(0), srsCode);
+            encoder.setMetadataString("cql_filter", "index > 1000");
+            //字段
+            setAttr(encoder);
+            encoder.setCqlFilterValue("index < 2000");
+        }
+        final GSLayerEncoder gsLayerEncoder = new GSLayerEncoder();
+        {
+            gsLayerEncoder.setDefaultStyle(WS_NAME, DEFAULT_STYLE);
+        }
+        final boolean dbLayer = publisher.publishDBLayer(WS_NAME, DS_NAME, encoder, gsLayerEncoder);
+        LOGGER.debug("publish result: {}", dbLayer);
+    }
+
+    static void setAttr(final GSFeatureTypeEncoder encoder){
+        final GSAttributeEncoder attributeEncoder = new GSAttributeEncoder();
+        attributeEncoder.setAttribute(FeatureTypeAttribute.name, "geom");
+        attributeEncoder.setAttribute(FeatureTypeAttribute.nillable, String.valueOf(false));
+        attributeEncoder.setAttribute(FeatureTypeAttribute.binding, Geometry.class.getName());
+
+        final GSAttributeEncoder attributeEncoder1 = new GSAttributeEncoder();
+        attributeEncoder1.setAttribute(FeatureTypeAttribute.name, "md");
+        attributeEncoder1.setAttribute(FeatureTypeAttribute.nillable, String.valueOf(true));
+        attributeEncoder1.setAttribute(FeatureTypeAttribute.binding, String.class.getName());
+
+        final GSAttributeEncoder attributeEncoder2 = new GSAttributeEncoder();
+        attributeEncoder2.setAttribute(FeatureTypeAttribute.name, "rd");
+        attributeEncoder2.setAttribute(FeatureTypeAttribute.nillable, String.valueOf(true));
+        attributeEncoder2.setAttribute(FeatureTypeAttribute.binding, String.class.getName());
+
+        final GSAttributeEncoder attributeEncoder3 = new GSAttributeEncoder();
+        attributeEncoder3.setAttribute(FeatureTypeAttribute.name, "fcd");
+        attributeEncoder3.setAttribute(FeatureTypeAttribute.nillable, String.valueOf(true));
+        attributeEncoder3.setAttribute(FeatureTypeAttribute.binding, String.class.getName());
+
+        final GSAttributeEncoder attributeEncoder4 = new GSAttributeEncoder();
+        attributeEncoder4.setAttribute(FeatureTypeAttribute.name, "iso");
+        attributeEncoder4.setAttribute(FeatureTypeAttribute.nillable, String.valueOf(true));
+        attributeEncoder4.setAttribute(FeatureTypeAttribute.binding, String.class.getName());
+
+        final GSAttributeEncoder attributeEncoder5 = new GSAttributeEncoder();
+        attributeEncoder5.setAttribute(FeatureTypeAttribute.name, "is_c");
+        attributeEncoder5.setAttribute(FeatureTypeAttribute.nillable, String.valueOf(true));
+        attributeEncoder5.setAttribute(FeatureTypeAttribute.binding, String.class.getName());
+
+        final GSAttributeEncoder attributeEncoder6 = new GSAttributeEncoder();
+        attributeEncoder6.setAttribute(FeatureTypeAttribute.name, "index");
+        attributeEncoder6.setAttribute(FeatureTypeAttribute.nillable, String.valueOf(true));
+        attributeEncoder6.setAttribute(FeatureTypeAttribute.binding, Integer.class.getName());
+
+        encoder.setAttribute(attributeEncoder);
+        encoder.setAttribute(attributeEncoder1);
+        encoder.setAttribute(attributeEncoder2);
+        encoder.setAttribute(attributeEncoder3);
+        encoder.setAttribute(attributeEncoder4);
+        encoder.setAttribute(attributeEncoder5);
+        encoder.setAttribute(attributeEncoder6);
+    }
+
+
+
+    static class GSFeatureTypeEncoder1 extends GSFeatureTypeEncoder {
+        private final Element cqlFilter = new Element("cqlFilter");
+
+        public GSFeatureTypeEncoder1() {
+            addContent(cqlFilter);
+        }
+
+        public void setCqlFilterValue(final String cqlFilter) {
+            this.cqlFilter.addContent(cqlFilter);
+        }
+    }
+
+
 }
