@@ -266,6 +266,7 @@ public class GeoServerTest {
         final GSFeatureTypeEncoder1 encoder = new GSFeatureTypeEncoder1();
         {
             String name = "shp_feature4";
+            //必须和数据库表名称一致，否则gs会自动创建新的表（和name属性一致的表）
             encoder.setNativeName("shp_feature");
             encoder.setName(name);
             encoder.setTitle(name);
