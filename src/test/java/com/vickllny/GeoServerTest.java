@@ -7,6 +7,7 @@ import it.geosolutions.geoserver.rest.GeoServerRESTPublisher;
 import it.geosolutions.geoserver.rest.GeoServerRESTReader;
 import it.geosolutions.geoserver.rest.HTTPUtils;
 import it.geosolutions.geoserver.rest.decoder.RESTLayer;
+import it.geosolutions.geoserver.rest.decoder.RESTStyle;
 import it.geosolutions.geoserver.rest.encoder.GSLayerEncoder;
 import it.geosolutions.geoserver.rest.encoder.datastore.GSPostGISDatastoreEncoder;
 import it.geosolutions.geoserver.rest.encoder.feature.FeatureTypeAttribute;
@@ -22,6 +23,10 @@ import org.geotools.ows.wmts.WebMapTileServer;
 import org.geotools.ows.wmts.model.WMTSCapabilities;
 import org.geotools.ows.wmts.model.WMTSLayer;
 import org.geotools.referencing.CRS;
+import org.geotools.styling.StyleFactory;
+import org.geotools.styling.StyleFactoryImpl;
+import org.geotools.styling.StyledLayerDescriptor;
+import org.geotools.xml.styling.SLDParser;
 import org.jdom.Element;
 import org.junit.Test;
 import org.locationtech.jts.geom.Geometry;
@@ -288,6 +293,37 @@ public class GeoServerTest {
         }
         final boolean dbLayer = publisher.publishDBLayer(WS_NAME, DS_NAME, encoder, gsLayerEncoder);
         LOGGER.debug("publish result: {}", dbLayer);
+    }
+
+    @Test
+    public void configureLayer(){
+        final GeoServerRESTPublisher publisher = manager.getPublisher();
+        final String layerName = "shp_feature";
+        final GSLayerEncoder layerEncoder = new GSLayerEncoder();
+        layerEncoder.addStyle("burg");
+        layerEncoder.addStyle("capitals");
+        layerEncoder.addStyle("cite_lakes");
+
+        final boolean configureLayer = publisher.configureLayer(WS_NAME, layerName, layerEncoder);
+
+        LOGGER.debug("configure layer result: {}", configureLayer);
+    }
+
+    @Test
+    public void getStyle(){
+        final GeoServerRESTReader reader = manager.getReader();
+        final RESTStyle burg = reader.getStyle("burg");
+        final String readerSLD = reader.getSLD("burg");
+        LOGGER.debug("get style result: {}", burg != null);
+    }
+
+    @Test
+    public void validSld() throws IOException {
+        String sldFilePath = "/Users/vickllny/gis/burg.sld";
+        StyleFactory styleFactory = new StyleFactoryImpl();
+        SLDParser sldParser = new SLDParser(styleFactory, new File(sldFilePath).toURI().toURL());
+        final StyledLayerDescriptor descriptor = sldParser.parseSLD();
+        LOGGER.debug("descriptor: {}", descriptor);
     }
 
     static void setAttr(final GSFeatureTypeEncoder encoder){
